@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Scrabble Bag — 24 Random Draws, 25th = ZODIAC</title>
+  <style>
+    :root{--tile-size:72px; --gap:12px}
+    body{font-family:Inter, system-ui, -apple-system, Roboto, 'Segoe UI', Arial; background:linear-gradient(180deg,#0f172a,#021025); color:#e6eef8; display:flex; align-items:flex-start; justify-content:center; min-height:100vh; padding:28px}
+    .app{width:920px; max-width:96%;}
+    header{display:flex; align-items:center; justify-content:space-between; gap:12px}
+    h1{font-size:20px; margin:0}
+    .controls{display:flex; gap:8px; align-items:center}
+    button{background:#1f2937;border:0;color:#e6eef8;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+    button:active{transform:translateY(1px)}
+    .status{margin-top:18px;display:flex;gap:12px;align-items:center}
+    .draw-area{margin-top:18px;background:rgba(255,255,255,0.03);padding:18px;border-radius:12px;min-height:220px}
+    .draw-info{display:flex;align-items:center;gap:16px}
+    .board{display:flex;flex-wrap:wrap;gap:var(--gap);padding-top:8px}
+    .tile{width:var(--tile-size);height:var(--tile-size);border-radius:8px;background:linear-gradient(145deg,#f3d9b0,#d8b67a);border:2px solid #b08c4f;color:#111;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:32px;box-shadow:2px 4px 6px rgba(0,0,0,0.5), inset -2px -2px 4px rgba(0,0,0,0.15), inset 2px 2px 4px rgba(255,255,255,0.4);position:relative;transform:translateY(-20px) scale(0.88);opacity:0;}
+    .tile.small{width:56px;height:56px;font-size:22px}
+    .tile .score{position:absolute;right:8px;bottom:6px;font-size:12px;font-weight:700;color:#333}
+
+    .tile.enter{animation:tileIn .36s cubic-bezier(.2,.9,.25,1) forwards}
+    @keyframes tileIn{from{opacity:0;transform:translateY(-30px) scale(0.8)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+    .history{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow:auto;padding-right:6px}
+    .history-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .draw-badge{min-width:34px;height:34px;border-radius:8px;background:#07132a;color:#8ad2ff;display:flex;align-items:center;justify-content:center;font-weight:700;padding:2px;padding-left:8px; padding-right:8px;}
+
+    .footer{margin-top:14px;color:#9fb6d7;font-size:13px}
+    .small{font-size:13px;color:#9fb6d7}
+    input[type=range]{width:140px}
+
+    /* responsive */
+    @media (max-width:560px){:root{--tile-size:56px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <!-- <h1>Scrabble Tile Animator — 24 random draws, 25th spells <span style="color:#ffd166">ZODIAC</span></h1> -->
+      <div class="controls">
+        <button id="startBtn">Start</button>
+        <button id="stepBtn">Step</button>
+        <button id="resetBtn">Reset</button>
+        <div class="small">Speed</div>
+        <input id="speedRange" type="range" min="1" max="900" step="10" value="50">
+      </div>
+    </header>
+
+    <!-- <div class="status">
+      <div class="draw-info">
+        <div class="small">Current draw:</div>
+        <div id="drawNumber" style="font-weight:800;color:#9be7ff">—</div>
+        <div class="small">(25 total)</div>
+      </div>
+      <div style="margin-left:24px" class="small">Each draw shows 6 tiles. Draws 1–24 are random. Draw 25 is <strong>ZODIAC</strong>.</div>
+    </div> -->
+
+    <div class="draw-area">
+      <div class="board" id="board"></div>
+      <div class="history" id="history"></div>
+    </div>
+
+    <div class="footer">Tip: press <strong>Start</strong> to play all draws in sequence, or use <strong>Step</strong> to advance one draw at a time. Press <strong>Reset</strong> to restart.</div>
+  </div>
+
+  <script>
+    const MS_CLEAR_TILE = 25;
+    const SCRABBLE_TILES = [
+      ['A',9,1],['B',2,3],['C',2,3],['D',4,2],['E',12,1],['F',2,4],['G',3,2],['H',2,4],['I',9,1],['J',1,8],['K',1,5],['L',4,1],['M',2,3],['N',6,1],['O',8,1],['P',2,3],['Q',1,10],['R',6,1],['S',4,1],['T',6,1],['U',4,1],['V',2,4],['W',2,4],['X',1,8],['Y',2,4],['Z',1,10]
+    ];
+
+    function makeBag(){
+      const bag = [];
+      SCRABBLE_TILES.forEach(([L,count])=>{
+        for(let i=0;i<count;i++) bag.push(L);
+      });
+      return bag;
+    }
+
+    function shuffleArray(a){
+      const arr = a.slice();
+      for(let i=arr.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]] = [arr[j],arr[i]];
+      }
+      return arr;
+    }
+
+    const board = document.getElementById('board');
+    const historyEl = document.getElementById('history');
+    // const drawNumberEl = document.getElementById('drawNumber');
+    const startBtn = document.getElementById('startBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedRange = document.getElementById('speedRange');
+
+    let currentDraw = 0;
+    const TOTAL_DRAWS = 25;
+    let playing = false;
+
+    function createTile(letter){
+      const el = document.createElement('div');
+      el.className = 'tile enter';
+      el.textContent = letter;
+      const score = SCRABBLE_TILES.find(x=>x[0]===letter)?.[2] ?? '';
+      const scEl = document.createElement('div'); scEl.className='score'; scEl.textContent = score; el.appendChild(scEl);
+      return el;
+    }
+
+    function produceDraw(index){
+      if(index === TOTAL_DRAWS){
+        return ['Z','O','D','I','A','C'];
+      }
+      const bag = makeBag();
+      const shuffled = shuffleArray(bag);
+      return shuffled.slice(0,6);
+    }
+
+    async function clearBoard(){
+    //   board.innerHTML='';
+        for(let i=0;i<board.children.length;i++) {
+            board.children[i].classList.remove("enter");
+            await sleep(MS_CLEAR_TILE);
+        }
+        board.innerHTML = "";
+
+    }
+
+    function addHistoryRow(idx, letters){
+      const row = document.createElement('div'); row.className='history-row';
+      const badge = document.createElement('div'); badge.className='draw-badge'; badge.textContent = letters.join(""); // idx;
+      row.appendChild(badge);
+    //   letters.forEach(l=>{
+    //     const t = document.createElement('div'); t.className='tile small'; t.textContent=l;
+    //     const sc = SCRABBLE_TILES.find(x=>x[0]===l)?.[2] ?? '';
+    //     const scEl = document.createElement('div'); scEl.className='score'; scEl.textContent = sc; t.appendChild(scEl);
+    //     row.appendChild(t);
+    //   });
+      historyEl.prepend(row);
+    }
+
+    function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+    async function animateDraw(idx){
+      currentDraw = idx;
+    //   drawNumberEl.textContent = idx;
+      const letters = produceDraw(idx);
+      //   if(idx < TOTAL_DRAWS) clearBoard();
+      await clearBoard();
+      for(let i=0;i<letters.length;i++){
+        const tile = createTile(letters[i]);
+        board.appendChild(tile);
+        void tile.offsetWidth;
+        // setTimeout(()=> tile.classList.remove('enter'), 450);
+        await sleep(Number(speedRange.value));
+      }
+      addHistoryRow(idx, letters);
+    }
+
+    async function playAll(){
+      if(playing) return;
+      playing = true; startBtn.disabled=true; stepBtn.disabled=true; resetBtn.disabled=true;
+      for(let d=currentDraw+1; d<=TOTAL_DRAWS; d++){
+        await animateDraw(d);
+        await sleep(1000);
+      }
+      playing=false; startBtn.disabled=false; stepBtn.disabled=false; resetBtn.disabled=false;
+    }
+
+    async function stepOne(){
+      if(playing) return;
+      if(currentDraw >= TOTAL_DRAWS) return;
+      await animateDraw(currentDraw+1);
+    }
+
+    function resetAll(){
+      currentDraw = 0; playing=false; clearBoard(); historyEl.innerHTML=''; 
+    //   drawNumberEl.textContent='—';
+    }
+
+    startBtn.addEventListener('click', ()=>{ playAll(); });
+    stepBtn.addEventListener('click', ()=>{ stepOne(); });
+    resetBtn.addEventListener('click', ()=>{ resetAll(); });
+
+    window.addEventListener('keydown', (e)=>{
+      if(e.code === 'Space') { e.preventDefault(); stepOne(); }
+      if(e.key.toLowerCase() === 'r') resetAll();
+    });
+
+    resetAll();
+  </script>
+</body>
+</html>
